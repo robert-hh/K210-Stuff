@@ -83,12 +83,13 @@ def hd(name):
 def newfile(path):
     print("Type file contents line by line, finish with EOF (Ctrl+D).")
     f = open(path, "w")
+    data = ""
     while 1:
         try:
             l = input()
         except EOFError:
             break
-        f.write(l)
-        f.write("\n")
+        data += l + '\n'
+    f.write(data)
     f.close()
 
