@@ -31,3 +31,9 @@ in the function gc_collect() of the file main.c. The documentation for pye.py is
 
 Both upysh.py and pye.py can  be placed into frozen bytecode. When doing so, loading
 times are fast.
+
+- main.c
+
+A 'hacked' version of main.c, which does not finish when Ctrl-D is entered. As a result, 
+ampy and find the board and at least execute the command ls and put. Ampy get does not work,
+because it tries to upload code to the K210 which is not supported.
