@@ -748,7 +748,7 @@ class Editor:
         if fname:
             self.fname = fname
             if fname in ('.', '..') or (stat(fname)[0] & 0x4000): 
-                self.content = ["Directory '{}'".format(fname), ""] + sorted(listdir(fname))
+                self.content = ["Directory '{}'".format(fname), ""] + listdir(fname)
             else:
                 f = open(fname)
                 self.content = f.read().split("\n")
@@ -760,6 +760,8 @@ class Editor:
                 self.write_tabs = "y" if tabs else "n"
     def put_file(self, fname):
         from os import remove, rename
+        if fname[0] != '/': 
+            fname = '/' + fname
         tmpfile = fname + ".pyetmp"
         f = open(tmpfile, "w")
         if self.write_tabs == 'y':
@@ -815,7 +817,7 @@ def pye(*content, tab_size=4, undo=50, device=0):
                     break
                 del slot[index]
             elif key == KEY_GET:
-                f = slot[index].line_edit("Open file: ", "", "_.-")
+                f = slot[index].line_edit("Open file: ", "", "_.-/")
                 slot.append(Editor(tab_size, undo))
                 index = len(slot) - 1
                 slot[index].get_file(f)
