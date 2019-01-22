@@ -51,3 +51,9 @@ Also: fix a memory leak and memory overflow in file_open()
 
 Extend the function mp_vfs_import_stat() such that it reports properly
 if a file exists or not. As a result, weak links to modules work. 
+
+- modutime.c, mphalport.c, mphalport.h
+
+Added ticks_ms, ticks_us, ticks_cpu, ticks_diff, ticks_add
+
+The ticks period is 2**62, which will probably never overflow, at least not in my lifetime. 
