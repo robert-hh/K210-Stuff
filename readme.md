@@ -37,3 +37,12 @@ times are fast.
 A 'hacked' version of main.c, which does not finish when Ctrl-D is entered. As a result, 
 ampy and find the board and at least execute the command ls and put. Ampy get does not work,
 because it tries to upload code to the K210 which is not supported.
+
+- file_io.c
+
+ A version which enables all file methods including special methods like __exit__ and __del__ Doing that allows enable statements like  
+ ```
+ with open("name") as myfile:  
+     ....
+```
+Also: fix a memory leak and memory overflow in file_open()
