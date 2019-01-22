@@ -46,3 +46,8 @@ because it tries to upload code to the K210 which is not supported.
      ....
 ```
 Also: fix a memory leak and memory overflow in file_open()
+
+- moduos.c
+
+Extend the function mp_vfs_import_stat() such that it reports properly
+if a file exists or not. As a result, weak links to modules work. 
