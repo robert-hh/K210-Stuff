@@ -94,15 +94,16 @@ STATIC mp_obj_t os_urandom(mp_obj_t num) {
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(os_urandom_obj, os_urandom);
 
 mp_import_stat_t mp_vfs_import_stat(const char *path) {
-
     int32_t fd;
-    char *temp_obj_path = API_FS_FullPath(path);
+    char temp_obj_path[SPIFFS_OBJ_NAME_LEN + 2];
 
-    if (temp_obj_path == NULL) {
-        mp_raise_OSError(MP_EIO);
-    }    
+    if (path[0] == '/') {
+        strcpy(temp_obj_path, path);
+    } else {
+        strcpy(temp_obj_path, "/");
+        strcat(temp_obj_path, path);
+    }
     fd = SPIFFS_open(&fs, temp_obj_path, SPIFFS_O_RDONLY, 0);
-    free(temp_obj_path);
     if(fd > 0) {
         SPIFFS_close(&fs, fd);
         return MP_IMPORT_STAT_FILE;
@@ -137,6 +138,12 @@ void API_FS_ChangeDir(const char *path)
 {
     strncpy(current_dir, path, SPIFFS_OBJ_NAME_LEN - 1);
     current_dir[SPIFFS_OBJ_NAME_LEN] = '\0'; // stop sign at the end
+    // cut trailing '/' characters
+    int len = strlen(current_dir);
+    while (len > 0 && current_dir[len] == '/') {
+        current_dir[len] = '\0';
+        --len;
+    }
 }
 
 char* API_FS_FullPath(const char *path_in)
@@ -158,15 +165,13 @@ char* API_FS_FullPath(const char *path_in)
 
 mp_obj_t mp_vfs_ls(size_t n_args, const mp_obj_t *args) {
     mp_obj_t dir_list = mp_obj_new_list(0, NULL);
-    char* tmp_dir = API_FS_GetCurDir();
     char* dirToList;
 
     if(n_args != 0 ) {
         dirToList = (char*)mp_obj_str_get_str(args[0]);
     } else {
-        dirToList = tmp_dir;
+        dirToList = API_FS_GetCurDir();
     }
-
     spiffs_DIR dir;
     if (!SPIFFS_opendir (&fs, (const char*)dirToList, &dir)) {
         mp_raise_OSError(MP_EIO);
@@ -175,49 +180,51 @@ mp_obj_t mp_vfs_ls(size_t n_args, const mp_obj_t *args) {
     while (SPIFFS_readdir (&dir, &de)) {
         static const char types[] = "?fdhs"; // file, dir, hardlink, softlink
         char name[sizeof(de.name) + 1] = { 0 };
-        char res_str[SPIFFS_OBJ_NAME_LEN + 10] = {0};
         memcpy (name, de.name, sizeof(de.name));
-        sprintf(res_str,"%c %6u %s", types[de.type], de.size, name);
+        // match the start of the name with current_dir
+        if (strncmp(name, dirToList, strlen(dirToList)) == 0) {
+            char res_str[SPIFFS_OBJ_NAME_LEN + 10] = {0};
+            sprintf(res_str,"%c %6u %s", types[de.type], de.size, name);
 
-        // Trace(1,"dir name:%s",dirent->d_name);
-        mp_obj_t dirStr = mp_obj_new_str(res_str,strlen(res_str));
-        mp_obj_list_append(dir_list, dirStr);
+            // Trace(1,"dir name:%s",dirent->d_name);
+            mp_obj_t dirStr = mp_obj_new_str(res_str,strlen(res_str));
+            mp_obj_list_append(dir_list, dirStr);
+        }
     }
     SPIFFS_closedir (&dir);
-    SPIFFS_opendir(&fs, tmp_dir, &dir);
+    SPIFFS_opendir(&fs, API_FS_GetCurDir(), &dir);
     return dir_list;
 }
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_vfs_ls_obj, 0, 1, mp_vfs_ls);
 
 mp_obj_t mp_vfs_listdir(size_t n_args, const mp_obj_t *args) {
     mp_obj_t dir_list = mp_obj_new_list(0, NULL);
-    char* tmp_dir = API_FS_GetCurDir();
-    char* dirToList;
+    char *dirToList;
 
     if(n_args != 0 ) {
         dirToList = (char*)mp_obj_str_get_str(args[0]);
     } else {
-        dirToList = tmp_dir;
+        dirToList = API_FS_GetCurDir();
     }
-
     spiffs_DIR dir;
     if (!SPIFFS_opendir (&fs, (const char*)dirToList, &dir)) {
         mp_raise_OSError(MP_EIO);
     }
-
     struct spiffs_dirent de;
     while (SPIFFS_readdir (&dir, &de)) {
         char name[SPIFFS_OBJ_NAME_LEN] = { 0 };
-        char res_str[SPIFFS_OBJ_NAME_LEN + 1] = {0};
         memcpy (name, de.name, strlen((char *)(de.name)));
-        sprintf(res_str,"%s",name);
-
-        // Trace(1,"dir name:%s",dirent->d_name);
-        mp_obj_t dirStr = mp_obj_new_str(res_str, strlen(res_str));
-        mp_obj_list_append(dir_list, dirStr);
+        // match the start of the name with current_dir
+        if (strncmp(name, dirToList, strlen(dirToList)) == 0) {
+            char res_str[SPIFFS_OBJ_NAME_LEN + 1] = {0};
+            sprintf(res_str,"%s",name);
+            // Trace(1,"dir name:%s",dirent->d_name);
+            mp_obj_t dirStr = mp_obj_new_str(res_str, strlen(res_str));
+            mp_obj_list_append(dir_list, dirStr);
+        }
     }
     SPIFFS_closedir (&dir);
-    SPIFFS_opendir(&fs, tmp_dir, &dir);
+    SPIFFS_opendir(&fs, API_FS_GetCurDir(), &dir);
     return dir_list;
 }
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_vfs_listdir_obj, 0, 1, mp_vfs_listdir);
@@ -238,12 +245,13 @@ MP_DEFINE_CONST_FUN_OBJ_1(mp_vfs_mkdir_obj, mp_vfs_mkdir);
 
 
 mp_obj_t mp_vfs_remove(mp_obj_t path_in) {
-    const char* path = mp_obj_str_get_str(path_in);
+    char* path = API_FS_FullPath(mp_obj_str_get_str(path_in));
 
     if(strcmp(path,"/") == 0 || strcmp(path,"/t") == 0) {
         mp_raise_OSError(MP_EINVAL);
     }
     s32_t ret = SPIFFS_remove(&fs,path);
+    free(path);
     if(ret != 0) {
         mp_raise_OSError(MP_EIO);
     }
@@ -252,10 +260,12 @@ mp_obj_t mp_vfs_remove(mp_obj_t path_in) {
 MP_DEFINE_CONST_FUN_OBJ_1(mp_vfs_remove_obj, mp_vfs_remove);
 
 mp_obj_t mp_vfs_rename(mp_obj_t old_path_in, mp_obj_t new_path_in) {
-    const char* path_old = mp_obj_str_get_str(old_path_in);
-    const char* path_new = mp_obj_str_get_str(new_path_in);
+    char* path_old = API_FS_FullPath(mp_obj_str_get_str(old_path_in));
+    char* path_new = API_FS_FullPath(mp_obj_str_get_str(new_path_in));
 
     s32_t ret = SPIFFS_rename(&fs, path_old, path_new);
+    free(path_old);
+    free(path_new);
     if(ret != 0) {
         mp_raise_OSError(MP_EIO);
     }
@@ -307,12 +317,12 @@ mp_obj_t mp_vfs_read(size_t n_args, const mp_obj_t *args) {
     mp_buffer_info_t bufinfo;
     mp_get_buffer_raise(args[3], &bufinfo, MP_BUFFER_WRITE);
     spiffs_file fd;
-    fd=SPIFFS_open(&fs,path, SPIFFS_RDWR, 0);
+    fd=SPIFFS_open(&fs, path, SPIFFS_RDWR, 0);
     if(fd == -1){
         mp_raise_OSError(MP_EIO);
     }
 
-    s32_t ls_res = SPIFFS_lseek(&fs, fd,offset,mode);
+    s32_t ls_res = SPIFFS_lseek(&fs, fd, offset, mode);
     if(ls_res != 0){
         mp_raise_OSError(MP_EIO);
     }
@@ -335,10 +345,8 @@ MP_DEFINE_CONST_FUN_OBJ_1(mp_vfs_rmdir_obj, mp_vfs_rmdir);
 
 mp_obj_t mp_vfs_chdir(mp_obj_t path_in) {
     const char* path = mp_obj_str_get_str(path_in);
-    int len = strlen(path);
     
-    if (path[0] != '/' || // for now only full path
-        (len > 1 && path[len - 1] == '/')) { // w/o trailing /
+    if (path[0] != '/') { // Must atart with / 
         mp_raise_OSError(MP_EINVAL);
     }
     API_FS_ChangeDir(path);

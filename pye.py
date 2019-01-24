@@ -1,3 +1,10 @@
+#
+# Small python text editor based on the
+# Very simple VT100 terminal text editor widget
+# Copyright (c) 2015 Paul Sokolovsky (initial code)
+# Copyright (c) 2015-2019 Robert Hammelrath (additional code)
+# Distributed under MIT License
+# 
 import sys, gc
 if sys.platform in ("linux", "darwin"):
     import os, signal, tty, termios
@@ -760,8 +767,6 @@ class Editor:
                 self.write_tabs = "y" if tabs else "n"
     def put_file(self, fname):
         from os import remove, rename
-        if fname[0] != '/': 
-            fname = '/' + fname
         tmpfile = fname + ".pyetmp"
         f = open(tmpfile, "w")
         if self.write_tabs == 'y':

@@ -7,7 +7,7 @@ class LS:
         self.__call__()
         return ""
 
-    def __call__(self, path="."):
+    def __call__(self, path="/"):
         l = os.ls(path)
         for f in l:
             print(f)
