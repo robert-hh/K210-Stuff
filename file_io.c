@@ -13,6 +13,7 @@
 #include "py/lexer.h"
 #include "spiffs-port.h"
 
+extern char *API_FS_FullPath(const char *path);
 const mp_obj_type_t mp_type_vfs_spiffs_textio;
 typedef struct _pyb_file_obj_t {
     mp_obj_base_t base;
@@ -29,10 +30,10 @@ STATIC mp_uint_t file_obj_read(mp_obj_t self_in, void *buf, mp_uint_t size, int 
     pyb_file_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
     spiffs_file fd=self->fd;
-	s32_t ret = SPIFFS_read(&fs, fd, buf, size);
+        s32_t ret = SPIFFS_read(&fs, fd, buf, size);
     if(ret <  0){
-	*errcode = MP_EIO;
-	return MP_STREAM_ERROR;
+        *errcode = MP_EIO;
+        return MP_STREAM_ERROR;
     }
     return (mp_uint_t)ret;
 }
@@ -42,13 +43,13 @@ STATIC mp_uint_t file_obj_write(mp_obj_t self_in, const void *buf, mp_uint_t siz
     int32_t ret = SPIFFS_write(&fs,self->fd, (uint8_t*)buf, size);
     if(ret < 0)
     {
-	*errcode = MP_EIO;
-	return MP_STREAM_ERROR;
+        *errcode = MP_EIO;
+        return MP_STREAM_ERROR;
     }
     if (ret != size) {
-	// The FatFS documentation says that this means disk full.
-	*errcode = MP_ENOSPC;
-	return MP_STREAM_ERROR;
+        // The FatFS documentation says that this means disk full.
+        *errcode = MP_ENOSPC;
+        return MP_STREAM_ERROR;
     }
     return (mp_uint_t)ret;
 }
@@ -58,48 +59,48 @@ STATIC mp_uint_t file_obj_ioctl(mp_obj_t o_in, mp_uint_t request, uintptr_t arg,
 
 
     if (request == MP_STREAM_SEEK) {
-	struct mp_stream_seek_t *s = (struct mp_stream_seek_t*)(uintptr_t)arg;
-	s32_t ret = 0;
+        struct mp_stream_seek_t *s = (struct mp_stream_seek_t*)(uintptr_t)arg;
+        s32_t ret = 0;
 
-	switch (s->whence) {
-	    case 0: // SEEK_SET
-		ret = SPIFFS_lseek(&fs,self->fd,s->offset,SPIFFS_SEEK_SET);
-		break;
+        switch (s->whence) {
+            case 0: // SEEK_SET
+                ret = SPIFFS_lseek(&fs,self->fd,s->offset,SPIFFS_SEEK_SET);
+                break;
 
-	    case 1: // SEEK_CUR
-		ret = SPIFFS_lseek(&fs,self->fd,s->offset,SPIFFS_SEEK_CUR);
-		break;
+            case 1: // SEEK_CUR
+                ret = SPIFFS_lseek(&fs,self->fd,s->offset,SPIFFS_SEEK_CUR);
+                break;
 
-	    case 2: // SEEK_END
-		ret = SPIFFS_lseek(&fs,self->fd,s->offset,SPIFFS_SEEK_END);
-		break;
-	}
+            case 2: // SEEK_END
+                ret = SPIFFS_lseek(&fs,self->fd,s->offset,SPIFFS_SEEK_END);
+                break;
+        }
 
-	s->offset = ret;
-	return 0;
+        s->offset = ret;
+        return 0;
 
     } else if (request == MP_STREAM_FLUSH) {
-	uint32_t ret = SPIFFS_fflush(&fs,self->fd);
-	if (ret != 0) {
-	    *errcode = MP_EIO;
-	    return MP_STREAM_ERROR;
-	}
-	return 0;
+        uint32_t ret = SPIFFS_fflush(&fs,self->fd);
+        if (ret != 0) {
+            *errcode = MP_EIO;
+            return MP_STREAM_ERROR;
+        }
+        return 0;
 
     } else if (request == MP_STREAM_CLOSE) {
-	// if fs==NULL then the file is closed and in that case this method is a no-op
-	if (self->fd > 0) {
-	    int32_t ret = SPIFFS_close(&fs,self->fd);
-	    if (ret != 0) {
-		*errcode = MP_EIO;
-		return MP_STREAM_ERROR;
-	    }
-	}
-	return 0;
+        // if fs==NULL then the file is closed and in that case this method is a no-op
+        if (self->fd > 0) {
+            int32_t ret = SPIFFS_close(&fs,self->fd);
+            if (ret != 0) {
+                *errcode = MP_EIO;
+                return MP_STREAM_ERROR;
+            }
+        }
+        return 0;
 
     } else {
-	*errcode = MP_EINVAL;
-	return MP_STREAM_ERROR;
+        *errcode = MP_EINVAL;
+        return MP_STREAM_ERROR;
     }
     return MP_STREAM_ERROR;
 }
@@ -119,47 +120,45 @@ STATIC const mp_arg_t file_open_args[] = {
     uint32_t mode = 0;
     // TODO make sure only one of r, w, x, a, and b, t are specified
     while (*mode_s) {
-	switch (*mode_s++) {
-	    case 'r':
-		mode |= SPIFFS_O_RDONLY;
-		break;
-	    case 'w':
-		mode |= SPIFFS_O_RDWR | SPIFFS_O_CREAT;
-		break;
-	    case 'x':
-		mode |= SPIFFS_O_RDWR | SPIFFS_O_CREAT | SPIFFS_O_TRUNC;
-		break;
-	    case 'a':
-		mode |= SPIFFS_O_RDWR | SPIFFS_O_APPEND;
-		break;
-	    case '+':
-		mode |= SPIFFS_O_RDWR;
-		break;
-	    #if MICROPY_PY_IO_FILEIO
-	    case 'b':
-		type = &mp_type_vfs_spiffs_fileio;
-		break;
-	    #endif
-	    case 't':
-		type = &mp_type_vfs_spiffs_textio;
-		break;
-	}
+        switch (*mode_s++) {
+            case 'r':
+                mode |= SPIFFS_O_RDONLY;
+                break;
+            case 'w':
+                mode |= SPIFFS_O_RDWR | SPIFFS_O_CREAT;
+                break;
+            case 'x':
+                mode |= SPIFFS_O_RDWR | SPIFFS_O_CREAT | SPIFFS_O_TRUNC;
+                break;
+            case 'a':
+                mode |= SPIFFS_O_RDWR | SPIFFS_O_APPEND;
+                break;
+            case '+':
+                mode |= SPIFFS_O_RDWR;
+                break;
+            #if MICROPY_PY_IO_FILEIO
+            case 'b':
+                type = &mp_type_vfs_spiffs_fileio;
+                break;
+            #endif
+            case 't':
+                type = &mp_type_vfs_spiffs_textio;
+                break;
+        }
     }
     pyb_file_obj_t *o = m_new_obj_with_finaliser(pyb_file_obj_t);
     o->base.type = type;
+
     spiffs_file fd;
-    if (file_name[0]!='/') { // add '/' before path if it's missing
-	uint8_t *temp_obj_path = malloc(strlen(file_name) + 1);
-	temp_obj_path[0] = '/';
-	strcpy(temp_obj_path + 1, file_name);
-	fd = SPIFFS_open(&fs, temp_obj_path, mode, 0);
-	free(temp_obj_path);
-    } else {
-	fd = SPIFFS_open(&fs, file_name, mode, 0);
-    }
+    char *temp_obj_path = API_FS_FullPath(file_name);
+    if (temp_obj_path == NULL) {
+        mp_raise_OSError(MP_EIO);
+    }    
+    fd = SPIFFS_open(&fs, temp_obj_path, mode, 0);
+    free(temp_obj_path);
 
     if(fd <= 0)
-	mp_raise_OSError(MP_EIO);
+        mp_raise_OSError(MP_EIO);
     o->fd = fd;
 
     return MP_OBJ_FROM_PTR(o);
@@ -233,10 +232,10 @@ const mp_obj_type_t mp_type_vfs_spiffs_textio = {
 mp_obj_t mp_vfs_open(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_file, ARG_mode, ARG_encoding };
     static const mp_arg_t allowed_args[] = {
-	{ MP_QSTR_file, MP_ARG_OBJ | MP_ARG_REQUIRED, {.u_rom_obj = MP_ROM_PTR(&mp_const_none_obj)} },
-	{ MP_QSTR_mode, MP_ARG_OBJ, {.u_rom_obj = MP_ROM_QSTR(MP_QSTR_r)} },
-	{ MP_QSTR_buffering, MP_ARG_INT, {.u_int = -1} },
-	{ MP_QSTR_encoding, MP_ARG_OBJ, {.u_rom_obj = MP_ROM_PTR(&mp_const_none_obj)} },
+        { MP_QSTR_file, MP_ARG_OBJ | MP_ARG_REQUIRED, {.u_rom_obj = MP_ROM_PTR(&mp_const_none_obj)} },
+        { MP_QSTR_mode, MP_ARG_OBJ, {.u_rom_obj = MP_ROM_QSTR(MP_QSTR_r)} },
+        { MP_QSTR_buffering, MP_ARG_INT, {.u_int = -1} },
+        { MP_QSTR_encoding, MP_ARG_OBJ, {.u_rom_obj = MP_ROM_PTR(&mp_const_none_obj)} },
     };
 
     // parse args
@@ -253,10 +252,10 @@ MP_DEFINE_CONST_FUN_OBJ_KW(mp_vfs_open_obj, 0, mp_vfs_open);
 mp_obj_t mp_builtin_open(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_file, ARG_mode, ARG_encoding };
     static const mp_arg_t allowed_args[] = {
-	{ MP_QSTR_file, MP_ARG_OBJ | MP_ARG_REQUIRED, {.u_rom_obj = MP_ROM_PTR(&mp_const_none_obj)} },
-	{ MP_QSTR_mode, MP_ARG_OBJ, {.u_rom_obj = MP_ROM_QSTR(MP_QSTR_r)} },
-	{ MP_QSTR_buffering, MP_ARG_INT, {.u_int = -1} },
-	{ MP_QSTR_encoding, MP_ARG_OBJ, {.u_rom_obj = MP_ROM_PTR(&mp_const_none_obj)} },
+        { MP_QSTR_file, MP_ARG_OBJ | MP_ARG_REQUIRED, {.u_rom_obj = MP_ROM_PTR(&mp_const_none_obj)} },
+        { MP_QSTR_mode, MP_ARG_OBJ, {.u_rom_obj = MP_ROM_QSTR(MP_QSTR_r)} },
+        { MP_QSTR_buffering, MP_ARG_INT, {.u_int = -1} },
+        { MP_QSTR_encoding, MP_ARG_OBJ, {.u_rom_obj = MP_ROM_PTR(&mp_const_none_obj)} },
     };
 
     // parse args
@@ -280,21 +279,21 @@ typedef struct _mp_reader_vfs_t {
 STATIC mp_uint_t mp_reader_vfs_readbyte(void *data) {
     mp_reader_vfs_t *reader = (mp_reader_vfs_t*)data;
     if (reader->pos >= reader->len) {
-	if (reader->len < sizeof(reader->buf)) {
-	    return MP_READER_EOF;
-	} else {
-	    int errcode;
-	    reader->len = mp_stream_rw(reader->file, reader->buf, sizeof(reader->buf),
-		&errcode, MP_STREAM_RW_READ | MP_STREAM_RW_ONCE);
-	    if (errcode != 0) {
-		// TODO handle errors properly
-		return MP_READER_EOF;
-	    }
-	    if (reader->len == 0) {
-		return MP_READER_EOF;
-	    }
-	    reader->pos = 0;
-	}
+        if (reader->len < sizeof(reader->buf)) {
+            return MP_READER_EOF;
+        } else {
+            int errcode;
+            reader->len = mp_stream_rw(reader->file, reader->buf, sizeof(reader->buf),
+                &errcode, MP_STREAM_RW_READ | MP_STREAM_RW_ONCE);
+            if (errcode != 0) {
+                // TODO handle errors properly
+                return MP_READER_EOF;
+            }
+            if (reader->len == 0) {
+                return MP_READER_EOF;
+            }
+            reader->pos = 0;
+        }
     }
     return reader->buf[reader->pos++];
 }
@@ -312,7 +311,7 @@ void mp_reader_new_file(mp_reader_t *reader, const char *filename) {
     int errcode;
     rf->len = mp_stream_rw(rf->file, rf->buf, sizeof(rf->buf), &errcode, MP_STREAM_RW_READ | MP_STREAM_RW_ONCE);
     if (errcode != 0) {
-	mp_raise_OSError(errcode);
+        mp_raise_OSError(errcode);
     }
     rf->pos = 0;
     reader->data = rf;
@@ -334,13 +333,13 @@ mp_import_stat_t mp_import_stat(const char *path) {
     int32_t fd = SPIFFS_open(&fs,path,SPIFFS_O_RDONLY,0);
     if(fd>0)
     {
-	SPIFFS_close(&fs,fd);
-	return MP_IMPORT_STAT_FILE;
+        SPIFFS_close(&fs,fd);
+        return MP_IMPORT_STAT_FILE;
     }
     spiffs_DIR dir;
-	if (!SPIFFS_opendir (&fs, path, &dir))
+        if (!SPIFFS_opendir (&fs, path, &dir))
     {
-	return MP_IMPORT_STAT_DIR;
+        return MP_IMPORT_STAT_DIR;
     }
     return MP_IMPORT_STAT_NO_EXIST;
 }

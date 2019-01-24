@@ -8,10 +8,9 @@ class LS:
         return ""
 
     def __call__(self, path="."):
-        l = os.listdir(path)
+        l = os.ls(path)
         for f in l:
-            e = f.split()
-            print("{} {:6d} {:s}".format(e[0], int(e[1]), e[2]))
+            print(f)
 
 class MAN:
 
