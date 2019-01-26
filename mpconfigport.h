@@ -94,6 +94,7 @@ extern const struct _mp_print_t mp_debug_print;
 #define MICROPY_LONGINT_IMPL                (MICROPY_LONGINT_IMPL_MPZ)
 #define MICROPY_FLOAT_IMPL                  (MICROPY_FLOAT_IMPL_DOUBLE)
 #define MICROPY_PY_BUILTINS_HELP    (1)
+#define MICROPY_PY_BUILTINS_HELP_MODULES (1)
 #define MICROPY_PY_BUILTINS_HELP_TEXT       kendryte_k210_help_text
 #define MICROPY_PY_BUILTINS_COMPLEX (0)
 #define MICROPY_PY_BUILTINS_FLOAT   (1)
@@ -128,7 +129,7 @@ extern const struct _mp_print_t mp_debug_print;
 #define MICROPY_PY_CMATH                    (1)
 #define MICROPY_PY_IO                       (1)
 #define MICROPY_PY_IO_IOBASE                (1)
-#define MICROPY_PY_IO_FILEIO                (0)
+#define MICROPY_PY_IO_FILEIO                (1)
 #define MICROPY_PY_IO_BYTESIO               (1)
 #define MICROPY_PY_IO_BUFFEREDWRITER        (1)
 #define MICROPY_PY_STRUCT                   (1)
@@ -217,6 +218,8 @@ typedef uint64_t mp_uint_t; // must be pointer size
 typedef long mp_off_t;
 
 #define MP_PLAT_PRINT_STRN(str, len) mp_hal_stdout_tx_strn_cooked(str, len)
+#define mp_type_fileio                      mp_type_vfs_spiffs_fileio
+#define mp_type_textio                      mp_type_vfs_spiffs_textio
 
 // extra built in names to add to the global namespace
 #define MICROPY_PORT_BUILTINS \
@@ -237,11 +240,10 @@ extern const struct _mp_obj_module_t utime_module;
     { MP_OBJ_NEW_QSTR(MP_QSTR_socket), (mp_obj_t)&socket_module }, \
 
 #define MICROPY_PORT_BUILTIN_MODULE_WEAK_LINKS \
-    { MP_OBJ_NEW_QSTR(MP_QSTR_os), (mp_obj_t)&uos_module }, \
-    { MP_OBJ_NEW_QSTR(MP_QSTR_re), (mp_obj_t)&mp_module_ure }, \
-    { MP_OBJ_NEW_QSTR(MP_QSTR_time), (mp_obj_t)&utime_module }, \
     { MP_OBJ_NEW_QSTR(MP_QSTR_binascii), (mp_obj_t)&mp_module_ubinascii }, \
     { MP_OBJ_NEW_QSTR(MP_QSTR_collections), (mp_obj_t)&mp_module_collections }, \
+    { MP_OBJ_NEW_QSTR(MP_QSTR_re), (mp_obj_t)&mp_module_ure }, \
+    { MP_OBJ_NEW_QSTR(MP_QSTR_time), (mp_obj_t)&utime_module }, \
 
 
 

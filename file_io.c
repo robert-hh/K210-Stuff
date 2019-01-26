@@ -15,6 +15,8 @@
 
 extern char *API_FS_FullPath(const char *path);
 const mp_obj_type_t mp_type_vfs_spiffs_textio;
+const mp_obj_type_t mp_type_vfs_spiffs_fileio;
+
 typedef struct _pyb_file_obj_t {
     mp_obj_base_t base;
     spiffs_file fd;

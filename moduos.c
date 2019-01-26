@@ -136,13 +136,17 @@ char *API_FS_GetCurDir()
 
 void API_FS_ChangeDir(const char *path)
 {
-    strncpy(current_dir, path, SPIFFS_OBJ_NAME_LEN - 1);
+    if (path[0] == '/') {
+        strncpy(current_dir, path, SPIFFS_OBJ_NAME_LEN - 1);
+    } else {
+        strncat(current_dir, path, SPIFFS_OBJ_NAME_LEN - strlen(current_dir) - 1);
+    }
     current_dir[SPIFFS_OBJ_NAME_LEN] = '\0'; // stop sign at the end
-    // cut trailing '/' characters
+    // append '/' if it is missing
     int len = strlen(current_dir);
-    while (len > 0 && current_dir[len] == '/') {
-        current_dir[len] = '\0';
-        --len;
+    if (len < 1 || current_dir[len - 1] != '/') {
+        current_dir[len] = '/';
+        current_dir[len + 1] = '\0';
     }
 }
 
@@ -151,10 +155,7 @@ char* API_FS_FullPath(const char *path_in)
     char *path = malloc(strlen(current_dir) + strlen(path_in) + 2);
     if (path != NULL) {
         if (path_in[0] != '/') { // prefix current_dir
-            strcpy(path, current_dir); 
-            if (strcmp(path, "/") != 0) { // not only /
-                strcat(path, "/");
-            }
+            strcpy(path, current_dir);
             strcat(path, path_in);
         } else {
             strcpy(path, path_in);
@@ -317,7 +318,7 @@ mp_obj_t mp_vfs_read(size_t n_args, const mp_obj_t *args) {
     mp_buffer_info_t bufinfo;
     mp_get_buffer_raise(args[3], &bufinfo, MP_BUFFER_WRITE);
     spiffs_file fd;
-    fd=SPIFFS_open(&fs, path, SPIFFS_RDWR, 0);
+    fd = SPIFFS_open(&fs, path, SPIFFS_RDWR, 0);
     if(fd == -1){
         mp_raise_OSError(MP_EIO);
     }
@@ -346,9 +347,6 @@ MP_DEFINE_CONST_FUN_OBJ_1(mp_vfs_rmdir_obj, mp_vfs_rmdir);
 mp_obj_t mp_vfs_chdir(mp_obj_t path_in) {
     const char* path = mp_obj_str_get_str(path_in);
     
-    if (path[0] != '/') { // Must atart with / 
-        mp_raise_OSError(MP_EINVAL);
-    }
     API_FS_ChangeDir(path);
     return mp_const_none;
 }
@@ -357,8 +355,16 @@ MP_DEFINE_CONST_FUN_OBJ_1(mp_vfs_chdir_obj, mp_vfs_chdir);
 
 mp_obj_t mp_vfs_getcwd(void) {
     char* tmp_dir = API_FS_GetCurDir();
-
+    // not implemented yet:
+    // if not TLD, cut trailing '/'
+    // don't know if required or useful.
+    // If yes, this is the code:
+    // char* tmp_dir = API_FS_FullPath("");
+    // if (strcmp(tmp_dir, "/") != 0) {
+        // tmp_dir[strlen(tmp_dir) - 1] = '\0';
+    // }
     mp_obj_t retVal = mp_obj_new_str(tmp_dir, strlen(tmp_dir));
+    // free(tmp_dir);
     return retVal;
 }
 MP_DEFINE_CONST_FUN_OBJ_0(mp_vfs_getcwd_obj, mp_vfs_getcwd);
