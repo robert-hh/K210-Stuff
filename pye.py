@@ -1,10 +1,3 @@
-#
-# Small python text editor based on the
-# Very simple VT100 terminal text editor widget
-# Copyright (c) 2015 Paul Sokolovsky (initial code)
-# Copyright (c) 2015-2019 Robert Hammelrath (additional code)
-# Distributed under MIT License
-# 
 import sys, gc
 if sys.platform in ("linux", "darwin"):
     import os, signal, tty, termios
@@ -15,19 +8,11 @@ if sys.implementation.name == "micropython":
     is_micropython = True
     from uio import StringIO
     from ure import compile as re_compile
-    import builtins
-    if not hasattr(builtins, "min"): # patch for k210
-        def min(a, b):
-            return a if a < b else b
-    if not hasattr(builtins, "max"): # patch for k210
-        def max(a, b):
-            return a if a > b else b
 else:
     is_micropython = False
     const = lambda x:x
     from _io import StringIO
     from re import compile as re_compile
-
 PYE_VERSION = " V2.29 "
 KEY_NONE = const(0x00)
 KEY_UP = const(0x0b)
@@ -46,6 +31,7 @@ KEY_QUIT = const(0x11)
 KEY_ENTER = const(0x0a)
 KEY_BACKSPACE = const(0x08)
 KEY_DELETE = const(0x7f)
+KEY_DEL_EOL = const(0xfff7)
 KEY_WRITE = const(0x13)
 KEY_TAB = const(0x09)
 KEY_BACKTAB = const(0x15)
@@ -123,7 +109,7 @@ class Editor:
     "\x10" : KEY_COMMENT, 
     "\x1b[1;5H": KEY_FIRST, 
     "\x1b[1;5F": KEY_LAST, 
-    "\x1b[3;5~": KEY_YANK, 
+    "\x1b[3;5~": KEY_DEL_EOL, 
     "\x0b" : KEY_MATCH,
     "\x1b[M" : KEY_MOUSE,
     }
@@ -211,7 +197,7 @@ class Editor:
         if is_linux and not is_micropython:
             signal.signal(signal.SIGWINCH, Editor.signal_handler)
         if is_micropython:
-            # gc.collect()
+            gc.collect()
             if flag:
                 self.message += "{} Bytes Memory available".format(gc.mem_free())
     def get_input(self): 
@@ -226,31 +212,37 @@ class Editor:
             if in_buffer in self.KEYMAP:
                 c = self.KEYMAP[in_buffer]
                 if c != KEY_MOUSE:
-                    return c, ""
+                    return c, None
                 else: 
                     mouse_fct = ord((self.rd())) 
                     mouse_x = ord(self.rd()) - 33
                     mouse_y = ord(self.rd()) - 33
                     if mouse_fct == 0x61:
-                        return KEY_SCRLDN, ""
+                        return KEY_SCRLDN, None
                     elif mouse_fct == 0x60:
-                        return KEY_SCRLUP, ""
+                        return KEY_SCRLUP, None
                     else:
                         return KEY_MOUSE, [mouse_x, mouse_y, mouse_fct] 
             elif ord(in_buffer[0]) >= 32:
                 return KEY_NONE, in_buffer
     def display_window(self): 
+        
         self.cur_line = min(self.total_lines - 1, max(self.cur_line, 0))
         self.col = max(0, min(self.col, len(self.content[self.cur_line])))
+        
         if self.col >= Editor.width + self.margin:
             self.margin = self.col - Editor.width + (Editor.width >> 2)
         elif self.col < self.margin:
             self.margin = max(self.col - (Editor.width >> 2), 0)
+        
         if not (self.top_line <= self.cur_line < self.top_line + Editor.height): 
             self.top_line = max(self.cur_line - self.row, 0)
+        
         self.row = self.cur_line - self.top_line
+        
         self.cursor(False)
         i = self.top_line
+        low_mark, high_mark = (-2, -1) if self.mark is None else self.line_range()
         for c in range(Editor.height):
             if i == self.total_lines: 
                 if Editor.scrbuf[c] != (False,''):
@@ -258,8 +250,7 @@ class Editor:
                     self.clear_to_eol()
                     Editor.scrbuf[c] = (False,'')
             else:
-                l = (self.mark is not None and (
-                    (self.mark <= i <= self.cur_line) or (self.cur_line <= i <= self.mark)),
+                l = (low_mark <= i < high_mark,
                      self.content[i][self.margin:self.margin + Editor.width])
                 if l != Editor.scrbuf[c]: 
                     self.goto(c, 0)
@@ -272,6 +263,7 @@ class Editor:
                         self.hilite(0)
                     Editor.scrbuf[c] = l
                 i += 1
+        
         self.goto(Editor.height, 0)
         self.hilite(1)
         self.wr("{}{} Row: {}/{} Col: {}  {}".format(
@@ -358,21 +350,27 @@ class Editor:
         while pos != stop and self.issymbol(s[pos], zap):
             pos += way
         return pos
-    def skip_up(self):
-        if self.col == 0 and self.cur_line > 0:
+    def move_up(self):
+        if self.cur_line > 0:
             self.cur_line -= 1
-            self.col = len(self.content[self.cur_line])
             if self.cur_line < self.top_line:
                 self.scroll_up(1)
+    def skip_up(self):
+        if self.col == 0 and self.cur_line > 0:
+            self.col = len(self.content[self.cur_line - 1])
+            self.move_up()
             return True
         else:
             return False
-    def skip_down(self, l):
-        if self.col >= len(l) and self.cur_line < self.total_lines - 1:
-            self.col = 0
+    def move_down(self):
+        if self.cur_line < self.total_lines - 1:
             self.cur_line += 1
             if self.cur_line == self.top_line + Editor.height:
                 self.scroll_down(1)
+    def skip_down(self, l):
+        if self.col >= len(l) and self.cur_line < self.total_lines - 1:
+            self.col = 0
+            self.move_down()
             return True
         else:
             return False
@@ -432,22 +430,10 @@ class Editor:
             self.undo_add(self.cur_line, [l], 0x20 if char == " " else 0x41)
             self.content[self.cur_line] = l[:self.col] + char + l[self.col:]
             self.col += len(char)
-        elif key in (KEY_DOWN, KEY_SHIFT_DOWN):
-            if key == KEY_SHIFT_DOWN and self.mark is None:
-                self.mark = self.cur_line
-            else:
-                if self.cur_line < self.total_lines - 1:
-                    self.cur_line += 1
-                    if self.cur_line == self.top_line + Editor.height:
-                        self.scroll_down(1)
-        elif key in (KEY_UP, KEY_SHIFT_UP):
-            if key == KEY_SHIFT_UP and self.mark is None:
-                self.mark = self.cur_line
-            else:
-                if self.cur_line > 0:
-                    self.cur_line -= 1
-                    if self.cur_line < self.top_line:
-                        self.scroll_up(1)
+        elif key == KEY_DOWN:
+            self.move_down()
+        elif key == KEY_UP:
+            self.move_up()
         elif key == KEY_LEFT:
             if not self.skip_up():
                 self.col -= 1
@@ -490,6 +476,10 @@ class Editor:
                 self.content[self.cur_line - 1] += self.content.pop(self.cur_line)
                 self.cur_line -= 1
                 self.total_lines -= 1
+        elif key == KEY_DEL_EOL:
+            if self.col < len(l):
+                self.undo_add(self.cur_line, [l], KEY_DEL_EOL)
+                self.content[self.cur_line] = l[:self.col]
         elif key == KEY_HOME:
             ni = self.spaces(l)
             self.col = ni if self.col == 0 else 0
@@ -590,6 +580,16 @@ class Editor:
                                 pos = len(self.content[i - 1]) - 1
         elif key == KEY_MARK:
             self.mark = self.cur_line if self.mark is None else None
+        elif key == KEY_SHIFT_DOWN:
+            if self.mark is None:
+                self.mark = self.cur_line
+            else:
+                self.move_down()
+        elif key == KEY_SHIFT_UP:
+            if self.mark is None:
+                self.mark = self.cur_line
+            else:
+                self.move_up()
         elif key == KEY_ENTER:
             self.mark = None
             self.undo_add(self.cur_line, [l], KEY_NONE, 2)
@@ -603,8 +603,8 @@ class Editor:
             self.col = ni
         elif key == KEY_TAB:
             if self.mark is None:
-                ni = self.tab_size - self.col % self.tab_size 
                 self.undo_add(self.cur_line, [l], KEY_TAB)
+                ni = self.tab_size - self.col % self.tab_size 
                 self.content[self.cur_line] = l[:self.col] + ' ' * ni + l[self.col:]
                 self.col += ni
             else:
@@ -768,10 +768,10 @@ class Editor:
     def put_file(self, fname):
         from os import remove, rename
         tmpfile = fname + ".pyetmp"
-        f = open(tmpfile, "w")
         if self.write_tabs == 'y':
             for i, l in enumerate(self.content):
                 self.content[i] = packtabs(l)
+        f = open(tmpfile, "w")
         f.write('\n'.join(self.content))
         f.close()
         try:
@@ -794,7 +794,7 @@ def expandtabs(s):
     else:
         return s, False
 def pye(*content, tab_size=4, undo=50, device=0):
-    # gc.collect() 
+    gc.collect() 
     slot = [Editor(tab_size, undo)]
     index = 0
     if content:
@@ -822,7 +822,7 @@ def pye(*content, tab_size=4, undo=50, device=0):
                     break
                 del slot[index]
             elif key == KEY_GET:
-                f = slot[index].line_edit("Open file: ", "", "_.-/")
+                f = slot[index].line_edit("Open file: ", "", "_.-")
                 slot.append(Editor(tab_size, undo))
                 index = len(slot) - 1
                 slot[index].get_file(f)
