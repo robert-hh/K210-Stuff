@@ -1,6 +1,8 @@
 # Various file for the Sipeed MaixPy K210
 
 This folder contains a few python scripts than can be used for the Sipeed MaixPy K210.
+It also contains some C files, but these were made for the previous generation of the Maixpy 
+firmware. Most likely is does not fit any more.
 
 ## uart_core.c
 

@@ -46,12 +46,12 @@ ls
 ls(object)
 head(file [, #_of_lines])
 man
-mkdir(newdir)
+mkdir(newdir) (SD card only)
 mv(from, to)
 newfile(file)
 pwd
 rm(file)
-rmdir(empty_dir)
+rmdir(empty_dir)  (SD card only)
 """)
 
     def __call__(self):
