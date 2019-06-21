@@ -13,7 +13,7 @@ else:
     const = lambda x:x
     from _io import StringIO
     from re import compile as re_compile
-PYE_VERSION = " V2.29 "
+PYE_VERSION = " V2.30 "
 KEY_NONE = const(0x00)
 KEY_UP = const(0x0b)
 KEY_DOWN = const(0x0d)
@@ -121,7 +121,7 @@ class Editor:
     comment_char = "\x23 " 
     word_char = "_\\" 
     def __init__(self, tab_size, undo_limit):
-        self.top_line = self.cur_line = self.row = self.col = self.margin = 0
+        self.top_line = self.cur_line = self.row = self.vcol = self.col = self.margin = 0
         self.tab_size = tab_size
         self.changed = ""
         self.message = self.fname = ""
@@ -228,12 +228,12 @@ class Editor:
     def display_window(self): 
         
         self.cur_line = min(self.total_lines - 1, max(self.cur_line, 0))
-        self.col = max(0, min(self.col, len(self.content[self.cur_line])))
+        self.vcol = max(0, min(self.col, len(self.content[self.cur_line])))
         
-        if self.col >= Editor.width + self.margin:
-            self.margin = self.col - Editor.width + (Editor.width >> 2)
-        elif self.col < self.margin:
-            self.margin = max(self.col - (Editor.width >> 2), 0)
+        if self.vcol >= Editor.width + self.margin:
+            self.margin = self.vcol - Editor.width + (Editor.width >> 2)
+        elif self.vcol < self.margin:
+            self.margin = max(self.vcol - (Editor.width >> 2), 0)
         
         if not (self.top_line <= self.cur_line < self.top_line + Editor.height): 
             self.top_line = max(self.cur_line - self.row, 0)
@@ -268,10 +268,10 @@ class Editor:
         self.hilite(1)
         self.wr("{}{} Row: {}/{} Col: {}  {}".format(
             self.changed, self.fname, self.cur_line + 1, self.total_lines,
-            self.col + 1, self.message)[:self.width - 1])
+            self.vcol + 1, self.message)[:self.width - 1])
         self.clear_to_eol() 
         self.hilite(0)
-        self.goto(self.row, self.col - self.margin)
+        self.goto(self.row, self.vcol - self.margin)
         self.cursor(True)
     def spaces(self, line, pos = None): 
         return (len(line) - len(line.lstrip(" ")) if pos is None else 
@@ -426,6 +426,7 @@ class Editor:
     def handle_edit_keys(self, key, char): 
         l = self.content[self.cur_line]
         if key == KEY_NONE: 
+            self.col = self.vcol
             self.mark = None
             self.undo_add(self.cur_line, [l], 0x20 if char == " " else 0x41)
             self.content[self.cur_line] = l[:self.col] + char + l[self.col:]
@@ -435,6 +436,7 @@ class Editor:
         elif key == KEY_UP:
             self.move_up()
         elif key == KEY_LEFT:
+            self.col = self.vcol
             if not self.skip_up():
                 self.col -= 1
         elif key == KEY_RIGHT:
@@ -453,29 +455,33 @@ class Editor:
         elif key == KEY_DELETE:
             if self.mark is not None:
                 self.delete_lines(False)
-            elif self.col < len(l):
-                self.undo_add(self.cur_line, [l], KEY_DELETE)
-                self.content[self.cur_line] = l[:self.col] + l[self.col + 1:]
-            elif (self.cur_line + 1) < self.total_lines: 
-                self.undo_add(self.cur_line, [l, self.content[self.cur_line + 1]], KEY_NONE)
-                self.content[self.cur_line] = l + (
-                    self.content.pop(self.cur_line + 1).lstrip()
-                    if Editor.autoindent == "y" and self.col > 0
-                    else self.content.pop(self.cur_line + 1))
-                self.total_lines -= 1
+            else:
+                self.col = self.vcol
+                if self.col < len(l):
+                    self.undo_add(self.cur_line, [l], KEY_DELETE)
+                    self.content[self.cur_line] = l[:self.col] + l[self.col + 1:]
+                elif (self.cur_line + 1) < self.total_lines: 
+                    self.undo_add(self.cur_line, [l, self.content[self.cur_line + 1]], KEY_NONE)
+                    self.content[self.cur_line] = l + (
+                        self.content.pop(self.cur_line + 1).lstrip()
+                        if Editor.autoindent == "y" and self.col > 0
+                        else self.content.pop(self.cur_line + 1))
+                    self.total_lines -= 1
         elif key == KEY_BACKSPACE:
             if self.mark is not None:
                 self.delete_lines(False)
-            elif self.col > 0:
-                self.undo_add(self.cur_line, [l], KEY_BACKSPACE)
-                self.content[self.cur_line] = l[:self.col - 1] + l[self.col:]
-                self.col -= 1
-            elif self.cur_line > 0: 
-                self.undo_add(self.cur_line - 1, [self.content[self.cur_line - 1], l], KEY_NONE)
-                self.col = len(self.content[self.cur_line - 1])
-                self.content[self.cur_line - 1] += self.content.pop(self.cur_line)
-                self.cur_line -= 1
-                self.total_lines -= 1
+            else:
+                self.col = self.vcol
+                if self.col > 0:
+                    self.undo_add(self.cur_line, [l], KEY_BACKSPACE)
+                    self.content[self.cur_line] = l[:self.col - 1] + l[self.col:]
+                    self.col -= 1
+                elif self.cur_line > 0: 
+                    self.undo_add(self.cur_line - 1, [self.content[self.cur_line - 1], l], KEY_NONE)
+                    self.col = len(self.content[self.cur_line - 1])
+                    self.content[self.cur_line - 1] += self.content.pop(self.cur_line)
+                    self.cur_line -= 1
+                    self.total_lines -= 1
         elif key == KEY_DEL_EOL:
             if self.col < len(l):
                 self.undo_add(self.cur_line, [l], KEY_DEL_EOL)
@@ -591,6 +597,7 @@ class Editor:
             else:
                 self.move_up()
         elif key == KEY_ENTER:
+            self.col = self.vcol
             self.mark = None
             self.undo_add(self.cur_line, [l], KEY_NONE, 2)
             self.content[self.cur_line] = l[:self.col]
@@ -603,6 +610,7 @@ class Editor:
             self.col = ni
         elif key == KEY_TAB:
             if self.mark is None:
+                self.col = self.vcol
                 self.undo_add(self.cur_line, [l], KEY_TAB)
                 ni = self.tab_size - self.col % self.tab_size 
                 self.content[self.cur_line] = l[:self.col] + ' ' * ni + l[self.col:]
@@ -615,6 +623,7 @@ class Editor:
                         self.content[i] = ' ' * (self.tab_size - self.spaces(self.content[i]) % self.tab_size) + self.content[i]
         elif key == KEY_BACKTAB:
             if self.mark is None:
+                self.col = self.vcol
                 ni = min((self.col - 1) % self.tab_size + 1, self.spaces(l, self.col)) 
                 if ni > 0:
                     self.undo_add(self.cur_line, [l], KEY_BACKTAB)
@@ -812,7 +821,7 @@ def pye(*content, tab_size=4, undo=50, device=0):
             index += 1
     else:
         slot[0].get_file(".")
-        index = 1
+        index = 0
     Editor.init_tty(device)
     while True:
         try:
