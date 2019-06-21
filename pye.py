@@ -176,7 +176,7 @@ class Editor:
         Editor.scrbuf[:-scrolling] = Editor.scrbuf[scrolling:]
         Editor.scrbuf[-scrolling:] = [''] * scrolling
         self.goto(Editor.height - 1, 0)
-        self.wr("\x1bD " * scrolling)
+        self.wr("\n" * scrolling)
     def get_screen_size(self):
         self.wr('\x1b[999;999H\x1b[6n')
         pos = ''
@@ -773,6 +773,7 @@ class Editor:
                 self.content[i] = packtabs(l)
         f = open(tmpfile, "w")
         f.write('\n'.join(self.content))
+        f.write('\n')
         f.close()
         try:
             remove(fname)
