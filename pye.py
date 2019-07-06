@@ -759,14 +759,19 @@ class Editor:
             else:
                 sb.write(c)
         return sb.getvalue()
+    def fullpath(self, fname):
+        from os import getcwd
+        if fname[0] not in ('./'):
+            return getcwd() + '/' + fname
+        else:
+            return fname
     def get_file(self, fname):
-        from os import listdir, stat, getcwd
+        from os import listdir, stat
         if fname:
-            if not fname[0] in ('.', '/'):
-                fname = getcwd() + '/' + fname
             self.fname = fname
-            if fname in ('.', '..') or (stat(fname)[0] & 0x4000): 
-                self.content = ["Directory '{}'".format(fname), ""] + listdir(fname)
+            path = self.fullpath(fname)
+            if fname in ('.', '..') or (stat(path)[0] & 0x4000): 
+                self.content = ["Directory '{}'".format(path), ""] + listdir(path)
             else:
                 f = open(fname)
                 self.content = f.read().split("\n")
@@ -778,7 +783,8 @@ class Editor:
                 self.write_tabs = "y" if tabs else "n"
     def put_file(self, fname):
         from os import remove, rename
-        tmpfile = fname + ".pyetmp"
+        path = self.fullpath(fname)
+        tmpfile = path + ".pyetmp"
         if self.write_tabs == 'y':
             for i, l in enumerate(self.content):
                 self.content[i] = packtabs(l)
@@ -787,10 +793,10 @@ class Editor:
         f.write('\n')
         f.close()
         try:
-            remove(fname)
+            remove(path)
         except:
             pass
-        rename(tmpfile, fname)
+        rename(tmpfile, path)
 def expandtabs(s):
     if '\t' in s:
         sb = StringIO()
