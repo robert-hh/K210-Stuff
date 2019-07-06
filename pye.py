@@ -760,8 +760,10 @@ class Editor:
                 sb.write(c)
         return sb.getvalue()
     def get_file(self, fname):
-        from os import listdir, stat
+        from os import listdir, stat, getcwd
         if fname:
+            if not fname[0] in ('.', '/'):
+                fname = getcwd() + '/' + fname
             self.fname = fname
             if fname in ('.', '..') or (stat(fname)[0] & 0x4000): 
                 self.content = ["Directory '{}'".format(fname), ""] + listdir(fname)
